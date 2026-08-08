@@ -370,10 +370,46 @@ input, #classSel {
 #codeTypeSel {
     font-size: 120%;
 }
+#paramInfo {
+    max-width: 500px;
+    margin-bottom: 10px;
+    font-size: 90%;
+}
+#paramInfo summary {
+    cursor: pointer;
+    font-weight: bold;
+}
+#paramInfo table {
+    border-collapse: collapse;
+    margin-top: 6px;
+}
+#paramInfo th, #paramInfo td {
+    border: 1px solid #ccc;
+    padding: 2px 8px;
+    text-align: left;
+}
 
 </style>
 </head>
 <body id="body" onload="start()" >
+<details id="paramInfo">
+<summary>Pre-fill fields via URL parameters</summary>
+<p>Add any of these to the URL to pre-fill the matching field, e.g. <code>index.html?from=AMS&amp;to=SFO</code>:</p>
+<table>
+<tr><th>Parameter</th><th>Field</th></tr>
+<tr><td>firstName</td><td>First Name</td></tr>
+<tr><td>lastName</td><td>Last Name</td></tr>
+<tr><td>bookRef</td><td>Booking Ref</td></tr>
+<tr><td>from</td><td>From</td></tr>
+<tr><td>to</td><td>To</td></tr>
+<tr><td>fOp</td><td>Flight Operator</td></tr>
+<tr><td>fNum</td><td>Flight Number</td></tr>
+<tr><td>date</td><td>Date (YYYY-MM-DD)</td></tr>
+<tr><td>cls</td><td>Class (F/C/Y)</td></tr>
+<tr><td>seat</td><td>Seat</td></tr>
+<tr><td>seqNum</td><td>Boarding Index</td></tr>
+</table>
+</details>
 <div id="errMsg"></div>
 <div id="inputArea">
 <span class="tlabel">First Name</span><br>
