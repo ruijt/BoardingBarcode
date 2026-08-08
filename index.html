@@ -20,11 +20,37 @@
 var textOut = null
 var textIn = ""
 var fields = {}
+var onDrawComplete = null
 
 var run, getDayOfYear
 var ctx = null
     
-function start() 
+var queryFieldMap = {
+    'firstName': 'firstNameEd',
+    'lastName':  'lastNameEd',
+    'bookRef':   'bookRefEd',
+    'from':      'fromEd',
+    'to':        'toEd',
+    'fOp':       'fOpEd',
+    'fNum':      'fNumEd',
+    'date':      'dateEd',
+    'cls':       'classSel',
+    'seat':      'seatNumEd',
+    'seqNum':    'seqNumEd'
+}
+
+function applyQueryParams() {
+    var params = new URLSearchParams(window.location.search)
+    for (var key in queryFieldMap) {
+        if (!params.has(key))
+            continue
+        var el = document.getElementById(queryFieldMap[key])
+        if (el)
+            el.value = params.get(key)
+    }
+}
+
+function start()
 {
     run = Module.cwrap('run', null, ['number', 'string', 'number', 'number'])
 
@@ -34,7 +60,8 @@ function start()
  //   var dy = getDayOfYear(d.getDate(), d.getMonth(), d.getFullYear())
   //  dayOfYearEd.value = '' + dy
     dateEd.value = todayInputValue()
-    
+    applyQueryParams()
+
     formatName()
     formatField('bookRef')
     formatField('from')
@@ -73,9 +100,12 @@ function update(fromRaw)
  //   theimg.innerHTML = textOut
     
     theimg2.onload = function() {
-        theimg3.width = theimg2.width
-        theimg3.height = theimg2.height
-        ctx.drawImage(theimg2, 0, 0)
+        drawWithFlightInfo()
+        if (onDrawComplete) {
+            var cb = onDrawComplete
+            onDrawComplete = null
+            cb()
+        }
     }
  
     var b = new Blob([textOut], {type: "image/svg+xml"});
@@ -87,7 +117,34 @@ function update(fromRaw)
         console.log(e)
     }
     reader.readAsDataURL(b); // read as data URL since we want to put it in an img src
-        
+
+}
+
+var INFO_AREA_H = 44
+function drawWithFlightInfo() {
+    var line1 = fields.fOp.trim() + fields.fNum.trim() + '   ' + fields.from.trim() + ' → ' + fields.to.trim()
+    var line2 = dateEd.value
+
+    ctx.font = 'bold 16px monospace'
+    var w1 = ctx.measureText(line1).width
+    ctx.font = '14px monospace'
+    var w2 = ctx.measureText(line2).width
+    var canvasW = Math.max(theimg2.width, w1 + 20, w2 + 20)
+
+    theimg3.width = canvasW           // resizing clears the canvas and resets ctx state
+    theimg3.height = theimg2.height + INFO_AREA_H
+
+    ctx.fillStyle = '#fff'
+    ctx.fillRect(0, 0, canvasW, theimg3.height)
+    ctx.fillStyle = '#000'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.font = 'bold 16px monospace'
+    ctx.fillText(line1, canvasW / 2, INFO_AREA_H * 0.35)
+    ctx.font = '14px monospace'
+    ctx.fillText(line2, canvasW / 2, INFO_AREA_H * 0.75)
+
+    ctx.drawImage(theimg2, (canvasW - theimg2.width) / 2, INFO_AREA_H)
 }
 
 function format() {
@@ -205,6 +262,58 @@ function typeUpdate() {
     update()
 }
 
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function downloadCurrentCanvas(dateStr) {
+    var name = 'boardingpass_' + fields.from.trim() + '_' + fields.to.trim() + '_' + dateStr + '.png'
+    var link = document.createElement('a')
+    link.download = name
+    link.href = theimg3.toDataURL('image/png')
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+}
+
+function addDays(dateStr, n) {
+    var p = dateStr.split('-').map(Number)
+    var d = new Date(Date.UTC(p[0], p[1] - 1, p[2]))
+    d.setUTCDate(d.getUTCDate() + n)
+    return d.toISOString().slice(0, 10)
+}
+
+async function generateDateRange() {
+    errclear()
+    var start = batchStartEd.value
+    var end = batchEndEd.value
+    if (!start || !end) {
+        err("Set both batch start and end dates")
+        return
+    }
+    if (start > end) {
+        err("Batch start date must be before end date")
+        return
+    }
+
+    batchGoBtn.disabled = true
+    var cur = start
+    var count = 0
+    while (cur <= end) {
+        dateEd.value = cur
+        var waitDraw = new Promise(resolve => { onDrawComplete = resolve })
+        readDate(true)
+        await waitDraw
+        downloadCurrentCanvas(cur)
+        count++
+        batchStatus.innerHTML = 'Downloaded ' + count + ': ' + cur
+        cur = addDays(cur, 1)
+        await sleep(250) // let the browser process each download before triggering the next
+    }
+    batchStatus.innerHTML = 'Done, downloaded ' + count + ' boarding passes'
+    batchGoBtn.disabled = false
+}
+
 </script>
 <script src="js_qr_brd.js"></script>
 <style>
@@ -295,6 +404,15 @@ input, #classSel {
 <input id="seatNumEd" type="text" value="35A" oninput="formatSeat(true)"><br>
 <span class="unimpCol tlabel">Boarding Index</span><br>
 <input id="seqNumEd" class="unimpCol" type="text" value="0001" oninput="formatSeqNum(true)"><br>
+</div>
+<div id="batchArea">
+<span class="tlabel">Batch generate (downloads one PNG per date, all other fields kept as-is)</span><br>
+<span class="tlabel">From date</span>
+<input id="batchStartEd" type="date">
+<span class="tlabel">To date</span>
+<input id="batchEndEd" type="date">
+<button id="batchGoBtn" type="button" onclick="generateDateRange()">Generate &amp; Download All</button><br>
+<span id="batchStatus" class="unimpCol"></span>
 </div>
 <span class="unimpCol">Raw Data:</span><br>
 <textarea id="textEdit" rows="4" cols="50" class="unimpCol" oninput="update(true)">
